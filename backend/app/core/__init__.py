@@ -1,0 +1,2 @@
+"""SentinelRAG core package."""
+

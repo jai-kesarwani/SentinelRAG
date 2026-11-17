@@ -1,0 +1,106 @@
+# =============================================================================
+# SentinelRAG — Production Docker Compose Configuration
+# Complete multi-container orchestration for SentinelRAG platform
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # MongoDB Service (Primary Application Datastore)
+  # ---------------------------------------------------------------------------
+  mongodb:
+    image: mongo:7.0
+    container_name: sentinelrag-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: sentinelrag
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - sentinel-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # SentinelRAG Backend API Service (FastAPI, PyMuPDF, ChromaDB, Security Gateway)
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sentinelrag-backend
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - APP_ENV=production
+      - APP_HOST=0.0.0.0
+      - APP_PORT=8000
+      - MONGODB_URI=mongodb://mongodb:27017
+      - MONGODB_DATABASE=sentinelrag
+      - CHROMA_PERSIST_DIR=/app/chroma_data
+      - CHROMA_COLLECTION_NAME=sentinelrag_chunks
+      - UPLOAD_DIR=/app/uploads
+      - REFRESH_COOKIE_SECURE=false
+    volumes:
+      - uploads_data:/app/uploads
+      - chroma_data:/app/chroma_data
+    ports:
+      - "8000:8000"
+    networks:
+      - sentinel-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # SentinelRAG Frontend SPA & Reverse Proxy (React, Vite, Nginx)
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sentinelrag-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    networks:
+      - sentinel-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+# -----------------------------------------------------------------------------
+# Persistent Volumes (Data survives container recreation and upgrades)
+# -----------------------------------------------------------------------------
+volumes:
+  mongo_data:
+    name: sentinelrag_mongo_data
+  uploads_data:
+    name: sentinelrag_uploads_data
+  chroma_data:
+    name: sentinelrag_chroma_data
+
+# -----------------------------------------------------------------------------
+# Internal Isolated Network
+# -----------------------------------------------------------------------------
+networks:
+  sentinel-net:
+    name: sentinelrag_network
+    driver: bridge
+
