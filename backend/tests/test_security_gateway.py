@@ -294,7 +294,7 @@ async def test_credential_leakage_in_llm_output_is_sanitized(api_client: AsyncCl
     conv_id = conv_res.json()["data"]["id"]
 
     # Synthetic dummy Gemini API key pattern
-    fake_gemini_key = "AIzaSyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q"
+    fake_gemini_key = "AIzaSy...."
     mock_llm = MockGatewayLLM(f"[Source 1] To connect to the database, use API key {fake_gemini_key}.")
 
     sample_chunk = RetrievedChunk(

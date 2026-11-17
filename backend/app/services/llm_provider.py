@@ -12,6 +12,8 @@ import random
 import time
 from typing import Any, Optional
 
+import asyncio
+import random
 import httpx
 
 from app.core.config import get_settings
@@ -130,6 +132,8 @@ class GeminiProvider(BaseLLMProvider):
         if not self.is_configured():
             logger.warning("Gemini API key is not configured")
             raise LLMConfigurationError("Gemini API key is missing or not configured.")
+
+        url = f"{self.base_url}/{self.model_name}:generateContent"
 
         payload: dict[str, Any] = {
             "contents": [
@@ -298,6 +302,12 @@ class GeminiProvider(BaseLLMProvider):
 
             except LLMProviderError:
                 raise
+            except httpx.TimeoutException as exc:
+                logger.warning("Gemini API request timed out", extra={"timeout": self.timeout_seconds})
+                raise LLMUnavailableError("LLM response timed out. Please try again.") from exc
+            except httpx.RequestError as exc:
+                logger.error("Network error communicating with Gemini API", extra={"error": str(exc)})
+                raise LLMUnavailableError(f"Network error communicating with LLM service: {exc}") from exc
 
             except (httpx.TimeoutException, httpx.RequestError) as exc:
                 latency_ms = round((time.monotonic() - start_time) * 1000, 2)
@@ -351,3 +361,4 @@ class GeminiProvider(BaseLLMProvider):
 
 
 gemini_provider = GeminiProvider()
+
